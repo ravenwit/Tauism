@@ -22,7 +22,7 @@ export const PRESETS: PresetMap = {
     tau: 0,
     uMin: '0', uMax: '2*pi',
     vMin: '-1', vMax: '1',
-    f1: '1',
+    f1: '0',
     f2: 'v'
   },
   'Klein Bottle (Figure-8)': {
@@ -30,8 +30,8 @@ export const PRESETS: PresetMap = {
     tau: 0.5,
     uMin: '0', uMax: '2*pi',
     vMin: '0', vMax: '2*pi',
-    f1: 'sin(v) * cos(v)',
-    f2: 'sin(v)'
+    f1: 'cos(v)',
+    f2: 'sin(v) * cos(v)'
   },
   'Twisted Ribbon': {
     R: 3,

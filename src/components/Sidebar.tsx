@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect, useTransition } from 'react';
 import { PRESETS } from '../constants';
 import { ParamState } from '../types';
-import { Settings2, RefreshCw, Box } from 'lucide-react';
+import { Settings2, RefreshCw, Box, Activity } from 'lucide-react';
 
 interface SidebarProps {
   params: ParamState;
@@ -14,6 +14,95 @@ interface SidebarProps {
   setResolution: (val: number) => void;
 }
 
+// ----------------------------------------------------
+// HELPER COMPONENTS
+// ----------------------------------------------------
+
+/** Equation Input blocks upstream updates until blur/Enter to prevent crashing math evaluate */
+function EquationInput({
+  value,
+  onChange,
+  placeholder = ''
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+}) {
+  const [localVal, setLocalVal] = useState(value);
+
+  useEffect(() => {
+    setLocalVal(value);
+  }, [value]);
+
+  const handleBlur = () => {
+    if (localVal !== value) onChange(localVal);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') e.currentTarget.blur();
+  };
+
+  return (
+    <input
+      type="text"
+      value={localVal}
+      onChange={(e) => setLocalVal(e.target.value)}
+      onBlur={handleBlur}
+      onKeyDown={handleKeyDown}
+      placeholder={placeholder}
+      className="w-full bg-zinc-950 border border-zinc-700 px-3 py-2 text-sm font-mono text-emerald-400 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/20 shadow-inner rounded-none"
+    />
+  );
+}
+
+/** Transition Range prevents heavy main-thread computations from freezing the UI slider */
+function TransitionRange({
+  value,
+  min,
+  max,
+  step,
+  onChange
+}: {
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (v: number) => void;
+}) {
+  const [localVal, setLocalVal] = useState(value);
+  const [, startTransition] = useTransition();
+
+  useEffect(() => {
+    setLocalVal(value);
+  }, [value]);
+
+  return (
+    <input
+      type="range"
+      min={min}
+      max={max}
+      step={step}
+      value={localVal}
+      onChange={(e) => {
+        const num = parseFloat(e.target.value);
+        setLocalVal(num);
+        // Dispatch upstream update into a background transition, unblocking the UI thread
+        startTransition(() => {
+          onChange(num);
+        });
+      }}
+      className="w-full appearance-none bg-zinc-800 h-1 outline-none slider-thumb-industrial"
+      style={{
+        WebkitAppearance: 'none',
+      }}
+    />
+  );
+}
+
+// ----------------------------------------------------
+// MAIN SIDEBAR
+// ----------------------------------------------------
+
 export function Sidebar({
   params,
   updateParam,
@@ -25,188 +114,168 @@ export function Sidebar({
   setResolution
 }: SidebarProps) {
   return (
-    <aside className="w-80 bg-zinc-900 border-r border-zinc-800 flex flex-col h-full overflow-y-auto custom-scrollbar">
-      <div className="p-6 border-b border-zinc-800">
-        <div className="flex items-center gap-2 text-zinc-100 mb-1">
-          <Box className="w-5 h-5 text-indigo-400" />
-          <h1 className="text-lg font-semibold tracking-tight">Manifold Explorer</h1>
+    <aside className="w-80 bg-zinc-900 border-r border-zinc-700 flex flex-col h-full overflow-y-auto font-sans text-zinc-300">
+      <style dangerouslySetInnerHTML={{
+        __html: `
+        .slider-thumb-industrial::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 12px;
+          height: 20px;
+          background: #10b981;
+          cursor: pointer;
+          border-radius: 0;
+        }
+        .slider-thumb-industrial::-moz-range-thumb {
+          width: 12px;
+          height: 20px;
+          background: #10b981;
+          cursor: pointer;
+          border: none;
+          border-radius: 0;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: #18181b;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #3f3f46;
+        }
+      `}} />
+
+      {/* HEADER */}
+      <div className="p-5 border-b-2 border-zinc-700 bg-zinc-950/50 flex flex-col gap-1">
+        <div className="flex items-center gap-2 text-zinc-100">
+          <Activity className="w-5 h-5 text-emerald-500" />
+          <h1 className="text-sm font-bold uppercase tracking-widest text-emerald-500">Manifold.SYS</h1>
         </div>
-        <p className="text-xs text-zinc-400">Unified Parametric Generator</p>
+        <div className="flex justify-between items-center text-xs font-mono text-zinc-500 mt-2 border-t border-zinc-800 pt-2">
+          <span>STAT: <span className="text-emerald-400">ONLINE</span></span>
+          <span>V 1.0.4</span>
+        </div>
       </div>
 
-      <div className="p-6 space-y-8 flex-1">
-        {/* Presets */}
-        <div className="space-y-3">
-          <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider flex items-center gap-2">
+      <div className="p-5 space-y-8 flex-1 custom-scrollbar">
+
+        {/* TOPOLOGY PRESET */}
+        <div className="space-y-3 relative before:absolute before:-left-5 before:top-2 before:h-8 before:w-1 before:bg-zinc-600">
+          <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
             <RefreshCw className="w-3 h-3" />
-            Presets
+            Topology Model
           </label>
-          <select
-            value={preset}
-            onChange={(e) => onPresetChange(e.target.value)}
-            className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all"
-          >
-            <option value="Custom" disabled>Custom</option>
-            {Object.keys(PRESETS).map((p) => (
-              <option key={p} value={p}>{p}</option>
-            ))}
-          </select>
+          <div className="relative">
+            <select
+              value={preset}
+              onChange={(e) => onPresetChange(e.target.value)}
+              className="w-full bg-zinc-950 border border-zinc-700 rounded-none px-3 py-2 text-sm font-mono text-emerald-400 focus:outline-none focus:border-emerald-500 appearance-none cursor-pointer"
+            >
+              <option value="Custom" disabled>CUSTOM CONFIG</option>
+              {Object.keys(PRESETS).map((p) => (
+                <option key={p} value={p}>[{p.toUpperCase()}]</option>
+              ))}
+            </select>
+            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-500">▼</div>
+          </div>
         </div>
 
-        {/* Base Space */}
-        <div className="space-y-4">
-          <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider flex items-center gap-2">
+        {/* BASE SPACE */}
+        <div className="space-y-4 relative before:absolute before:-left-5 before:top-2 before:h-24 before:w-1 before:bg-zinc-700">
+          <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
             <Settings2 className="w-3 h-3" />
-            Base Space (S¹)
+            Base Curve (S¹)
           </label>
-          
-          <div className="space-y-2">
-            <div className="flex justify-between">
-              <span className="text-sm text-zinc-300">Radius (R)</span>
-              <span className="text-sm text-zinc-500 font-mono">{params.R.toFixed(1)}</span>
+
+          <div className="space-y-2 bg-zinc-950 p-3 border border-zinc-800">
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-zinc-400 uppercase tracking-wider">Radius (R)</span>
+              <span className="text-xs text-emerald-400 font-mono bg-emerald-950/30 px-1 border border-emerald-900/50">{params.R.toFixed(1)}</span>
             </div>
-            <input
-              type="range"
-              min="0"
-              max="10"
-              step="0.1"
-              value={params.R}
-              onChange={(e) => updateParam('R', parseFloat(e.target.value))}
-              className="w-full accent-indigo-500"
-            />
+            <TransitionRange min={0} max={10} step={0.1} value={params.R} onChange={(v) => updateParam('R', v)} />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <span className="text-xs text-zinc-500">u min</span>
-              <input
-                type="text"
-                value={params.uMin}
-                onChange={(e) => updateParam('uMin', e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-md px-2 py-1.5 text-sm font-mono text-zinc-200 focus:outline-none focus:border-indigo-500"
-              />
+              <span className="text-[10px] text-zinc-500 font-mono uppercase">u.Min</span>
+              <EquationInput value={params.uMin} onChange={(v) => updateParam('uMin', v)} />
             </div>
             <div className="space-y-1">
-              <span className="text-xs text-zinc-500">u max</span>
-              <input
-                type="text"
-                value={params.uMax}
-                onChange={(e) => updateParam('uMax', e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-md px-2 py-1.5 text-sm font-mono text-zinc-200 focus:outline-none focus:border-indigo-500"
-              />
+              <span className="text-[10px] text-zinc-500 font-mono uppercase">u.Max</span>
+              <EquationInput value={params.uMax} onChange={(v) => updateParam('uMax', v)} />
             </div>
           </div>
         </div>
 
-        {/* Structural Group */}
-        <div className="space-y-4">
-          <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
-            Structural Group (SO(2))
+        {/* STRUCTURAL GROUP */}
+        <div className="space-y-4 relative before:absolute before:-left-5 before:top-2 before:h-12 before:w-1 before:bg-zinc-700">
+          <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest">
+            Structural Twist (SO(2))
           </label>
-          
-          <div className="space-y-2">
-            <div className="flex justify-between">
-              <span className="text-sm text-zinc-300">Twist (τ)</span>
-              <span className="text-sm text-zinc-500 font-mono">{params.tau.toFixed(2)}</span>
+
+          <div className="space-y-2 bg-zinc-950 p-3 border border-zinc-800">
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-zinc-400 uppercase tracking-wider">Topological Factor (τ)</span>
+              <span className="text-xs text-emerald-400 font-mono bg-emerald-950/30 px-1 border border-emerald-900/50">{params.tau.toFixed(2)}</span>
             </div>
-            <input
-              type="range"
-              min="-5"
-              max="5"
-              step="0.1"
-              value={params.tau}
-              onChange={(e) => updateParam('tau', parseFloat(e.target.value))}
-              className="w-full accent-indigo-500"
-            />
+            <TransitionRange min={-5} max={5} step={0.1} value={params.tau} onChange={(v) => updateParam('tau', v)} />
           </div>
         </div>
 
-        {/* Fiber */}
-        <div className="space-y-4">
-          <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
-            Fiber (F)
+        {/* FIBER */}
+        <div className="space-y-4 relative before:absolute before:-left-5 before:top-2 before:h-32 before:w-1 before:bg-zinc-700">
+          <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest">
+            Cross-Section (F)
           </label>
-          
-          <div className="space-y-3">
+
+          <div className="space-y-3 bg-zinc-950 p-3 border border-zinc-800">
             <div className="space-y-1">
-              <span className="text-xs text-zinc-500">f₁(v)</span>
-              <input
-                type="text"
-                value={params.f1}
-                onChange={(e) => updateParam('f1', e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-md px-3 py-2 text-sm font-mono text-zinc-200 focus:outline-none focus:border-indigo-500"
-                placeholder="e.g. cos(v)"
-              />
+              <span className="text-[10px] text-zinc-500 font-mono uppercase">Fiber Equ. f₁(v)</span>
+              <EquationInput value={params.f1} onChange={(v) => updateParam('f1', v)} placeholder="Function 1" />
             </div>
             <div className="space-y-1">
-              <span className="text-xs text-zinc-500">f₂(v)</span>
-              <input
-                type="text"
-                value={params.f2}
-                onChange={(e) => updateParam('f2', e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-md px-3 py-2 text-sm font-mono text-zinc-200 focus:outline-none focus:border-indigo-500"
-                placeholder="e.g. sin(v)"
-              />
+              <span className="text-[10px] text-zinc-500 font-mono uppercase">Fiber Equ. f₂(v)</span>
+              <EquationInput value={params.f2} onChange={(v) => updateParam('f2', v)} placeholder="Function 2" />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <span className="text-xs text-zinc-500">v min</span>
-              <input
-                type="text"
-                value={params.vMin}
-                onChange={(e) => updateParam('vMin', e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-md px-2 py-1.5 text-sm font-mono text-zinc-200 focus:outline-none focus:border-indigo-500"
-              />
+              <span className="text-[10px] text-zinc-500 font-mono uppercase">v.Min</span>
+              <EquationInput value={params.vMin} onChange={(v) => updateParam('vMin', v)} />
             </div>
             <div className="space-y-1">
-              <span className="text-xs text-zinc-500">v max</span>
-              <input
-                type="text"
-                value={params.vMax}
-                onChange={(e) => updateParam('vMax', e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-md px-2 py-1.5 text-sm font-mono text-zinc-200 focus:outline-none focus:border-indigo-500"
-              />
+              <span className="text-[10px] text-zinc-500 font-mono uppercase">v.Max</span>
+              <EquationInput value={params.vMax} onChange={(v) => updateParam('vMax', v)} />
             </div>
           </div>
         </div>
 
-        {/* Rendering */}
-        <div className="space-y-4 pt-4 border-t border-zinc-800">
-          <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
-            Rendering
+        {/* ENGINE PIPELINE */}
+        <div className="space-y-4 pt-6 border-t border-zinc-800 relative before:absolute before:-left-5 before:top-8 before:h-16 before:w-1 before:bg-zinc-700">
+          <label className="text-xs font-bold text-zinc-400 uppercase tracking-widest flex items-center gap-2">
+            <Box className="w-3 h-3" />
+            Render Pipeline
           </label>
-          
-          <div className="space-y-2">
-            <div className="flex justify-between">
-              <span className="text-sm text-zinc-300">Resolution</span>
-              <span className="text-sm text-zinc-500 font-mono">{resolution}</span>
+
+          <div className="space-y-2 bg-zinc-950 p-3 border border-zinc-800">
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-zinc-400 uppercase tracking-wider">Subdivision</span>
+              <span className="text-xs text-emerald-400 font-mono bg-emerald-950/30 px-1 border border-emerald-900/50">{resolution}px</span>
             </div>
-            <input
-              type="range"
-              min="20"
-              max="200"
-              step="10"
-              value={resolution}
-              onChange={(e) => setResolution(parseInt(e.target.value))}
-              className="w-full accent-indigo-500"
-            />
+            <TransitionRange min={20} max={200} step={10} value={resolution} onChange={setResolution} />
           </div>
 
-          <label className="flex items-center gap-3 cursor-pointer group">
-            <div className="relative">
-              <input
-                type="checkbox"
-                className="sr-only"
-                checked={wireframe}
-                onChange={(e) => setWireframe(e.target.checked)}
-              />
-              <div className={`block w-10 h-6 rounded-full transition-colors ${wireframe ? 'bg-indigo-500' : 'bg-zinc-700'}`}></div>
-              <div className={`absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${wireframe ? 'translate-x-4' : ''}`}></div>
-            </div>
-            <span className="text-sm text-zinc-300 group-hover:text-zinc-100 transition-colors">Wireframe Mode</span>
-          </label>
+          <button
+            onClick={() => setWireframe(!wireframe)}
+            className={`w-full flex items-center justify-between px-3 py-2 text-xs font-bold uppercase tracking-widest border transition-colors ${wireframe
+                ? 'bg-emerald-500/10 border-emerald-500/50 text-emerald-400'
+                : 'bg-zinc-950 border-zinc-800 text-zinc-500 hover:border-zinc-600'
+              }`}
+          >
+            <span>Structural Mesh</span>
+            <span className="font-mono">{wireframe ? '[ ON ]' : '[ OFF ]'}</span>
+          </button>
         </div>
       </div>
     </aside>

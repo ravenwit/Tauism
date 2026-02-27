@@ -14,19 +14,32 @@ interface SceneProps {
 function ParametricSurface({ params, wireframe, resolution, onError }: SceneProps & { onError: (err: string | null) => void }) {
   const meshRef = useRef<THREE.Mesh>(null);
 
-  const { geometry, error } = useMemo(() => {
+  const compiledMath = useMemo(() => {
     try {
-      const f1Compiled = compile(params.f1);
-      const f2Compiled = compile(params.f2);
-      const uMinCompiled = compile(params.uMin);
-      const uMaxCompiled = compile(params.uMax);
-      const vMinCompiled = compile(params.vMin);
-      const vMaxCompiled = compile(params.vMax);
+      return {
+        f1: compile(params.f1),
+        f2: compile(params.f2),
+        uMin: compile(params.uMin),
+        uMax: compile(params.uMax),
+        vMin: compile(params.vMin),
+        vMax: compile(params.vMax),
+        error: null
+      };
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  }, [params.f1, params.f2, params.uMin, params.uMax, params.vMin, params.vMax]);
 
-      const uMin = uMinCompiled.evaluate();
-      const uMax = uMaxCompiled.evaluate();
-      const vMin = vMinCompiled.evaluate();
-      const vMax = vMaxCompiled.evaluate();
+  const { geometry, error } = useMemo(() => {
+    if (compiledMath.error) return { geometry: null, error: compiledMath.error };
+
+    try {
+      const { f1, f2, uMin: uMinC, uMax: uMaxC, vMin: vMinC, vMax: vMaxC } = compiledMath as any;
+
+      const uMin = uMinC.evaluate();
+      const uMax = uMaxC.evaluate();
+      const vMin = vMinC.evaluate();
+      const vMax = vMaxC.evaluate();
 
       const geom = new THREE.BufferGeometry();
       const vertices = [];
@@ -36,23 +49,32 @@ function ParametricSurface({ params, wireframe, resolution, onError }: SceneProp
       const slices = resolution;
       const stacks = resolution;
 
+      const R = params.R;
+      const tau = params.tau;
+      const scope = { u: 0, v: 0 };
+
       for (let i = 0; i <= slices; i++) {
         const uNorm = i / slices;
         const u = uMin + uNorm * (uMax - uMin);
+        scope.u = u;
+
+        // Hoist u-dependent trigonometry out of the inner loop
+        const cos_tau_u = Math.cos(tau * u);
+        const sin_tau_u = Math.sin(tau * u);
+        const cos_u = Math.cos(u);
+        const sin_u = Math.sin(u);
 
         for (let j = 0; j <= stacks; j++) {
           const vNorm = j / stacks;
           const v = vMin + vNorm * (vMax - vMin);
+          scope.v = v;
 
-          const f1 = f1Compiled.evaluate({ v, u });
-          const f2 = f2Compiled.evaluate({ v, u });
+          const f1Val = f1.evaluate(scope);
+          const f2Val = f2.evaluate(scope);
 
-          const R = params.R;
-          const tau = params.tau;
-
-          const x = (R + f1 * Math.cos(tau * u) - f2 * Math.sin(tau * u)) * Math.cos(u);
-          const y = (R + f1 * Math.cos(tau * u) - f2 * Math.sin(tau * u)) * Math.sin(u);
-          const z = f1 * Math.sin(tau * u) + f2 * Math.cos(tau * u);
+          const x = (R + f1Val * cos_tau_u - f2Val * sin_tau_u) * cos_u;
+          const y = (R + f1Val * cos_tau_u - f2Val * sin_tau_u) * sin_u;
+          const z = f1Val * sin_tau_u + f2Val * cos_tau_u;
 
           vertices.push(x, y, z);
           uvs.push(uNorm, vNorm);
@@ -81,11 +103,20 @@ function ParametricSurface({ params, wireframe, resolution, onError }: SceneProp
       console.error("Math evaluation error:", err);
       return { geometry: null, error: err.message };
     }
-  }, [params, resolution]);
+  }, [compiledMath, params.R, params.tau, resolution]);
 
   React.useEffect(() => {
     onError(error);
   }, [error, onError]);
+
+  React.useEffect(() => {
+    // Prevent WebGL memory leaks by disposing of orphaned geometries
+    return () => {
+      if (geometry) {
+        geometry.dispose();
+      }
+    };
+  }, [geometry]);
 
   if (!geometry) {
     return null;

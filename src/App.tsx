@@ -26,9 +26,9 @@ export default function App() {
 
   return (
     <div className="flex h-screen w-full bg-zinc-950 text-zinc-100 overflow-hidden font-sans">
-      <Sidebar 
-        params={params} 
-        updateParam={updateParam} 
+      <Sidebar
+        params={params}
+        updateParam={updateParam}
         preset={preset}
         onPresetChange={handlePresetChange}
         wireframe={wireframe}
@@ -39,8 +39,8 @@ export default function App() {
       <main className="flex-1 relative h-full">
         <Scene params={params} wireframe={wireframe} resolution={resolution} />
         <div className="absolute top-4 right-4 pointer-events-none">
-          <div className="bg-zinc-900/80 backdrop-blur-md p-4 rounded-xl border border-zinc-800 shadow-xl max-w-sm">
-            <h2 className="text-sm font-semibold text-zinc-300 mb-2">Master Equation</h2>
+          <div className="bg-zinc-950/80 backdrop-blur-md p-4 border border-zinc-700 shadow-xl max-w-sm rounded-none">
+            <h2 className="text-[10px] font-bold uppercase tracking-widest text-emerald-500 mb-2 opacity-80">Master Evaluation Matrix</h2>
             <div className="text-xs font-mono text-zinc-400 space-y-1">
               <p>x = (R + f₁cos(τu) - f₂sin(τu)) * cos(u)</p>
               <p>y = (R + f₁cos(τu) - f₂sin(τu)) * sin(u)</p>
